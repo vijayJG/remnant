@@ -3,7 +3,7 @@ remnant scar
 ------------
 A personal incident knowledge base for your Linux machine.
 When something breaks and you fix it — record it here.
-Next time it breaks, you'll know exactly what to do.
+Next time it breaks, you will know exactly what to do.
 
 Usage:
     remnant scar add
@@ -15,12 +15,12 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Optional
+import socket
 
 import typer
 
 from remnant.core.database import db, init_db
-from remnant.core.errors import NotFoundError
+from remnant.core.git import get_git_context
 from remnant.output.terminal import (
     confirm,
     console,
@@ -40,9 +40,15 @@ app = typer.Typer(
 
 
 def _get_scar(scar_id: int) -> dict | None:
+    """Fetch a scar record by its scar table id."""
     with db() as conn:
         row = conn.execute(
-            "SELECT * FROM scars WHERE id = ?", (scar_id,)
+            """SELECT s.id, s.problem, s.cause, s.solution,
+                      r.title, r.tags, r.branch, r.created_at, r.id as record_id
+               FROM scars s
+               JOIN records r ON r.id = s.record_id
+               WHERE s.id = ?""",
+            (scar_id,),
         ).fetchone()
     return dict(row) if row else None
 
@@ -50,13 +56,13 @@ def _get_scar(scar_id: int) -> dict | None:
 def _prompt(label: str, required: bool = True) -> str:
     """Prompt the user for input, re-asking if required and empty."""
     while True:
-        value = console.input(f"[bold cyan]{label}:[/bold cyan] ").strip()
+        value = console.input(f"{label}: ").strip()
         if value or not required:
             return value
         print_warning("This field is required.")
 
 
-# ── Commands ──────────────────────────────────────────────────────────────────
+# -- Commands ------------------------------------------------------------------
 
 @app.command("add")
 def add_scar() -> None:
@@ -73,15 +79,37 @@ def add_scar() -> None:
     tags_raw = _prompt("Tags, space-separated (optional)", required=False)
     tags     = ",".join(tags_raw.split()) if tags_raw else ""
 
+    from pathlib import Path
+    git = get_git_context(Path.cwd())
+
     with db() as conn:
         cursor = conn.execute(
-            """INSERT INTO scars (title, problem, cause, solution, tags)
-               VALUES (?, ?, ?, ?, ?)""",
-            (title, problem, cause or None, solution, tags or None),
+            """INSERT INTO records
+               (type, title, body, tags, project, repository, branch, commit_hash, machine)
+               VALUES ('scar', ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                title,
+                problem,
+                tags or None,
+                git.get("project"),
+                git.get("repository"),
+                git.get("branch"),
+                git.get("commit_hash"),
+                socket.gethostname(),
+            ),
         )
-        scar_id = cursor.lastrowid
+        record_id = cursor.lastrowid
 
-    print_success(f"Incident recorded [dim](id: {scar_id})[/dim]")
+        conn.execute(
+            """INSERT INTO scars (record_id, problem, cause, solution)
+               VALUES (?, ?, ?, ?)""",
+            (record_id, problem, cause or None, solution),
+        )
+        scar_id = conn.execute(
+            "SELECT id FROM scars WHERE record_id = ?", (record_id,)
+        ).fetchone()["id"]
+
+    print_success(f"Incident recorded (id: {scar_id})")
 
 
 @app.command("list")
@@ -93,9 +121,10 @@ def list_scars(
 
     with db() as conn:
         rows = conn.execute(
-            """SELECT id, title, tags, created_at
-               FROM scars
-               ORDER BY created_at DESC
+            """SELECT s.id, r.title, r.tags, r.created_at
+               FROM scars s
+               JOIN records r ON r.id = s.record_id
+               ORDER BY r.created_at DESC
                LIMIT ?""",
             (limit,),
         ).fetchall()
@@ -109,12 +138,7 @@ def list_scars(
     print_table(
         columns=["ID", "Title", "Tags", "Date"],
         rows=[
-            [
-                str(r["id"]),
-                r["title"][:50],
-                r["tags"] or "—",
-                r["created_at"][:10],
-            ]
+            [str(r["id"]), r["title"][:50], r["tags"] or "-", r["created_at"][:10]]
             for r in rows
         ],
     )
@@ -124,40 +148,36 @@ def list_scars(
 def search_scars(
     query: str = typer.Argument(..., help="Search term"),
 ) -> None:
-    """Search incidents by keyword (searches title, problem, solution, tags)."""
+    """Search incidents by keyword."""
     init_db()
     like = f"%{query}%"
 
     with db() as conn:
         rows = conn.execute(
-            """SELECT id, title, tags, created_at
-               FROM scars
-               WHERE title LIKE ?
-                  OR problem LIKE ?
-                  OR solution LIKE ?
-                  OR tags LIKE ?
-               ORDER BY created_at DESC""",
+            """SELECT s.id, r.title, r.tags, r.created_at
+               FROM scars s
+               JOIN records r ON r.id = s.record_id
+               WHERE r.title LIKE ?
+                  OR s.problem LIKE ?
+                  OR s.solution LIKE ?
+                  OR r.tags LIKE ?
+               ORDER BY r.created_at DESC""",
             (like, like, like, like),
         ).fetchall()
 
     if not rows:
-        print_info(f"No incidents found for: [bold]{query}[/bold]")
+        print_info(f"No incidents found for: {query}")
         return
 
     print_header(f"SEARCH: {query} ({len(rows)} results)")
     print_table(
         columns=["ID", "Title", "Tags", "Date"],
         rows=[
-            [
-                str(r["id"]),
-                r["title"][:50],
-                r["tags"] or "—",
-                r["created_at"][:10],
-            ]
+            [str(r["id"]), r["title"][:50], r["tags"] or "-", r["created_at"][:10]]
             for r in rows
         ],
     )
-    print_info(f"\nUse [bold]remnant scar show <id>[/bold] to see full details.")
+    print_info("Use: remnant scar show <id> to see full details.")
 
 
 @app.command("show")
@@ -177,6 +197,7 @@ def show_scar(
     print_key_value("Cause",    record["cause"] or "Not recorded")
     print_key_value("Solution", record["solution"])
     print_key_value("Tags",     record["tags"] or "None")
+    print_key_value("Branch",   record["branch"] or "Not recorded")
     print_key_value("Recorded", record["created_at"][:10])
 
 
@@ -198,6 +219,6 @@ def remove_scar(
         return
 
     with db() as conn:
-        conn.execute("DELETE FROM scars WHERE id = ?", (scar_id,))
+        conn.execute("DELETE FROM records WHERE id = ?", (record["record_id"],))
 
     print_success(f"Removed incident #{scar_id}")

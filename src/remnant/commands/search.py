@@ -1,7 +1,14 @@
 """
-remnant.cli
------------
-Main CLI entry point. All subcommands registered here.
+remnant search
+--------------
+Cross-record search across why, scar, and context.
+One command to find anything you have recorded.
+
+Usage:
+    remnant search "nvidia"
+    remnant search "oauth" --type why
+    remnant search "kernel" --type scar
+    remnant search "ubuntu" --detail
 """
 
 from __future__ import annotations
@@ -10,48 +17,44 @@ from typing import Optional
 
 import typer
 
-from remnant import __version__
-from remnant.commands import why, scar, context
 from remnant.core.database import db, init_db
-from remnant.output.terminal import console, print_header, print_info, print_table
-
-app = typer.Typer(
-    name="remnant",
-    help=(
-        "Memory and history for your machine and code.\n\n"
-        "remnant remembers what your other tools forget:\n"
-        "why files exist, what broke and how you fixed it,\n"
-        "and where you left off in your projects."
-    ),
-    no_args_is_help=True,
-    rich_markup_mode="rich",
+from remnant.output.terminal import (
+    console,
+    print_header,
+    print_info,
+    print_table,
 )
 
-app.add_typer(why.app,     name="why",     help="Record WHY a file or config exists.")
-app.add_typer(scar.app,    name="scar",    help="Personal incident knowledge base.")
-app.add_typer(context.app, name="context", help="Restore project context.")
+app = typer.Typer(
+    help="Search across all recorded history — why, scar, and context.",
+    no_args_is_help=True,
+)
 
 
-def version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"remnant v{__version__}")
-        raise typer.Exit()
+def _search_records(query: str, record_type: Optional[str] = None) -> list[dict]:
+    like = f"%{query}%"
+    with db() as conn:
+        if record_type:
+            rows = conn.execute(
+                """SELECT id, type, title, body, path, project, branch, created_at
+                   FROM records
+                   WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ? OR path LIKE ?)
+                     AND type = ?
+                   ORDER BY created_at DESC""",
+                (like, like, like, like, record_type),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, type, title, body, path, project, branch, created_at
+                   FROM records
+                   WHERE title LIKE ? OR body LIKE ? OR tags LIKE ? OR path LIKE ?
+                   ORDER BY created_at DESC""",
+                (like, like, like, like),
+            ).fetchall()
+    return [dict(r) for r in rows]
 
 
-@app.callback()
-def main(
-    version: bool = typer.Option(
-        None, "--version", "-v",
-        help="Show version and exit.",
-        callback=version_callback,
-        is_eager=True,
-    ),
-) -> None:
-    """remnant — memory and history for your machine and code."""
-    pass
-
-
-@app.command("search")
+@app.command("query")
 def search(
     query: str = typer.Argument(..., help="Search term"),
     type_filter: Optional[str] = typer.Option(
@@ -65,31 +68,13 @@ def search(
 ) -> None:
     """Search all recorded history by keyword."""
     init_db()
-    like = f"%{query}%"
-
-    with db() as conn:
-        if type_filter:
-            rows = conn.execute(
-                """SELECT id, type, title, body, path, project, branch, created_at
-                   FROM records
-                   WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ? OR path LIKE ?)
-                     AND type = ?
-                   ORDER BY created_at DESC""",
-                (like, like, like, like, type_filter),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT id, type, title, body, path, project, branch, created_at
-                   FROM records
-                   WHERE title LIKE ? OR body LIKE ? OR tags LIKE ? OR path LIKE ?
-                   ORDER BY created_at DESC""",
-                (like, like, like, like),
-            ).fetchall()
-
-    results = [dict(r) for r in rows]
+    results = _search_records(query, type_filter)
 
     if not results:
-        print_info(f"No records found for: {query}")
+        if type_filter:
+            print_info(f"No {type_filter} records found for: {query}")
+        else:
+            print_info(f"No records found for: {query}")
         print_info("Try a different keyword or remove the --type filter.")
         return
 

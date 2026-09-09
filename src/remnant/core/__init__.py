@@ -1,0 +1,1 @@
+"""remnant core — shared infrastructure."""

@@ -87,7 +87,7 @@ def set_reason(
                    (type, title, body, path, project, repository, branch, commit_hash, machine)
                    VALUES ('why', ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    f"Why: {resolved}",
+                    f"Why: {Path(resolved).name}",
                     reason,
                     resolved,
                     git.get("project"),

@@ -9,7 +9,7 @@ description = "Memory and history for your machine and code."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-authors = [{ name = "Your Name", email = "your@email.com" }]
+authors = [{ name = "Vijayabalan J", email = "vijayjayagopan@email.com" }]
 keywords = ["linux", "developer-tools", "cli", "memory", "productivity"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -43,9 +43,9 @@ dev = [
 remnant = "remnant.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/remnant"
-Repository = "https://github.com/yourusername/remnant"
-Issues = "https://github.com/yourusername/remnant/issues"
+Homepage = "https://github.com/vijayJG/remnant"
+Repository = "https://github.com/vijayJG/remnant"
+Issues = "https://github.com/vijayJG/remnant/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/remnant"]

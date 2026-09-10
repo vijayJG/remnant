@@ -17,18 +17,16 @@ But nobody remembers:
 - Why does this config file exist?
 - What broke on this machine last time, and how did I fix it?
 - Where did I leave off in this project?
-- How does this codebase actually connect together?
-- What changed on my system this week?
 
-**remnant does.**
+remnant fills that gap with a local, terminal-native memory layer.
 
 ---
 
 ## Install
 
-```bash
+\`\`\`bash
 pip install remnant
-```
+\`\`\`
 
 Requires Python 3.10+ on Linux.
 
@@ -36,162 +34,100 @@ Requires Python 3.10+ on Linux.
 
 ## Commands
 
-### `remnant why` — Record why things exist
+### \`remnant why\` — Record why things exist
 
-```bash
-# Set a reason
+\`\`\`bash
 remnant why set ./config "Required because of a bug in Ubuntu 22.04"
-
-# Read it back
-remnant why ./config
-
-# List everything you've recorded
+remnant why get ./config
 remnant why list
-
-# Search by keyword
 remnant why search "Ubuntu"
-
-# Remove a reason
 remnant why remove ./config
-```
+\`\`\`
 
 ---
 
-### `remnant scar` — Personal incident knowledge base
+### \`remnant scar\` — Personal incident knowledge base
 
-When something breaks and you fix it — record it here.
-Next time it breaks, you'll know exactly what to do.
-
-```bash
-# Record a new incident (interactive)
+\`\`\`bash
 remnant scar add
-
-# List all incidents
 remnant scar list
-
-# Search by keyword
 remnant scar search "nvidia"
-
-# Show full details of incident #3
 remnant scar show 3
-
-# Remove an incident
 remnant scar remove 3
-```
-
-**Example session:**
-
-```
-$ remnant scar add
-
-RECORD INCIDENT
-Title: NVIDIA stopped working after kernel update
-What broke?: GPU not detected, black screen on login
-What caused it?: DKMS module was not rebuilt for new kernel
-How did you fix it?: sudo apt install --reinstall nvidia-dkms-535
-Tags: nvidia kernel dkms
-
-✓ Incident recorded (id: 1)
-```
-
-Later:
-
-```
-$ remnant scar search nvidia
-
-SEARCH: nvidia (1 result)
-
-ID  Title                                    Tags          Date
-1   NVIDIA stopped working after kernel up…  nvidia kern…  2026-09-09
-```
+\`\`\`
 
 ---
 
-### `remnant context` — Restore project context
+### \`remnant context\` — Restore project context
 
-Never spend 5 minutes asking "where was I?" again.
-
-```bash
-# Show current project context
+\`\`\`bash
 remnant context
-
-# Leave a note for future-you
-remnant context note "Working on the auth refactor, halfway through OAuth flow"
-
-# See all your notes for this project
+remnant context note "Working on auth refactor"
 remnant context notes
-```
-
-**Example output:**
-
-```
-PROJECT CONTEXT: my-app
-──────────────────────
-Directory        /home/user/projects/my-app
-Branch           feature/auth
-Last commit      Add OAuth2 token refresh logic
-Commit time      2026-09-08 23:14
-Uncommitted      3 file(s)
-Last note        Working on the auth refactor, halfway through OAuth flow
-Note saved       2h ago
-```
+\`\`\`
 
 ---
 
-## Coming Soon
+### \`remnant search\` — Search everything
 
-| Command | What it does |
-|---|---|
-| `remnant map` | Understand your codebase structure |
-| `remnant map dead` | Find potentially unused code |
-| `remnant map deps` | Find potentially unused dependencies |
-| `remnant drift` | Track how your Linux system changes over time |
-| `remnant drift deleted` | See what files were recently deleted |
-| `remnant report` | Weekly digest of everything remnant has recorded |
+\`\`\`bash
+remnant search "nvidia"
+remnant search "ubuntu" --type why
+remnant search "kernel" --type scar
+remnant search "oauth" --detail
+\`\`\`
 
 ---
 
-## Philosophy
+## How it works
 
-remnant is:
+Every record is stored in a shared local database with:
 
-- **Local-first** — no cloud account, no telemetry, your data stays on your machine
-- **Honest** — it never claims certainty where analysis is heuristic
-- **Composable** — every command supports `--format json` for piping into other tools
-- **Minimal** — one `pip install`, one command, everything under `remnant`
+- the content you wrote
+- the file or path it relates to
+- the project it belongs to
+- the git branch and commit at time of recording
+- the machine it was recorded on
 
----
-
-## Data Storage
-
-remnant stores everything locally:
-
-```
-~/.config/remnant/config.toml      # your configuration
-~/.local/share/remnant/remnant.db  # your data (SQLite)
-~/.cache/remnant/                  # temporary cache
-```
+\`remnant search\` finds anything across all commands.
+\`remnant context\` surfaces related history automatically.
 
 Nothing leaves your machine.
 
 ---
 
-## Configuration
+## Data storage
 
-Create `~/.config/remnant/config.toml` to customize behavior:
+\`\`\`
+~/.config/remnant/config.toml      # configuration
+~/.local/share/remnant/remnant.db  # all data (SQLite)
+~/.cache/remnant/                  # temporary cache
+\`\`\`
 
-```toml
-[core]
-color = true
-format = "human"   # or "json"
+---
 
-[drift]
-watch_paths = ["~/.config", "~/.bashrc", "~/.zshrc"]
-package_manager = "auto"
+## Philosophy
 
-[map]
-ignore = ["node_modules", ".git", "__pycache__", ".venv"]
-```
+- **Local-first** — no cloud, no telemetry, no accounts
+- **Honest** — observed facts only, no guessing
+- **Unified** — why, scar, and context are views over one shared history
+- **Minimal** — one pip install, one command, no background daemons
+
+---
+
+## Roadmap
+
+Current release:
+
+- \`remnant why\` — rationale for files and configs
+- \`remnant scar\` — personal incident knowledge base
+- \`remnant context\` — project working context
+- \`remnant search\` — cross-record retrieval
+
+Planned:
+
+- \`remnant map\` — code structure tied to recorded history
+- \`remnant report\` — weekly digest of recorded history
 
 ---
 
@@ -199,7 +135,9 @@ ignore = ["node_modules", ".git", "__pycache__", ".venv"]
 
 remnant welcomes contributions. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Issues labeled [`good first issue`](https://github.com/yourusername/remnant/issues?q=label%3A%22good+first+issue%22) are a great place to start.
+Issues labeled
+[\`good first issue\`](https://github.com/vijayJG/remnant/issues?q=label%3A%22good+first+issue%22)
+are a great place to start.
 
 ---
 
